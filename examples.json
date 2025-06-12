@@ -1,0 +1,47 @@
+[
+  {
+    "id": 1,
+    "question": "Выделить все накладные, выписанные в четных месяцах 2017 года, в которых товар «Телевизор» входил в количестве больше чем «компьютер».",
+    "sql": "SELECT DISTINCT t.ttnid\nFROM ttns t\nJOIN specifications s ON t.ttnid = s.ttnid\nJOIN specifications s1 ON t.ttnid = s1.ttnid\nJOIN products p ON s.productid = p.productid\nJOIN products p2 ON s1.productid = p2.productid\nWHERE extract(year from t.ttndate) = 2017\n  AND extract(month from t.ttndate)%2 = 0\n  AND p.productname = 'TV'\n  AND p2.productname = 'PC'\n  AND s.count > s1.count"
+  },
+  {
+    "id": 2,
+    "question": "Выделить все накладные, выписанные в 2018 году, в которых товар «Телевизор» продавался на сумму больше 3000, и в которых указывалось более 5 наименований товаров.",
+    "sql": "SELECT DISTINCT t.ttnid\nFROM ttns t\nJOIN specifications s ON t.ttnid = s.ttnid\nJOIN products p ON s.productid = p.productid\nWHERE extract(year from t.ttndate) = 2018\n  AND p.productname = 'TV'\nGROUP BY t.ttnid, p.productname\nHAVING SUM(s.price * s.count) > 3000\nINTERSECT\nSELECT DISTINCT s.ttnid\nFROM specifications s\nGROUP BY s.ttnid\nHAVING COUNT(DISTINCT s.productid) > 5"
+  },
+  {
+    "id": 3,
+    "question": "Выделить все накладные, выписанные в 2017 году, в которых продавались товары «Телевизор» и «компьютер», цена которых больше 1000, и в которых было больше 5 различных наименований товаров.",
+    "sql": "SELECT DISTINCT t.ttnid\nFROM ttns t\nJOIN specifications s ON t.ttnid = s.ttnid\nJOIN specifications s1 ON t.ttnid = s1.ttnid\nJOIN products p ON s.productid = p.productid\nJOIN products p2 ON s1.productid = p2.productid\nWHERE extract(year from t.ttndate) = 2017\n  AND p.productname = 'TV'\n  AND p2.productname = 'PC'\n  AND s.price > 1000 AND s1.price > 1000\nINTERSECT\nSELECT DISTINCT s.ttnid\nFROM specifications s\nGROUP BY s.ttnid\nHAVING COUNT(DISTINCT s.productid) > 5"
+  },
+  {
+    "id": 4,
+    "question": "Выделить всех клиентов, которые в период от 01.01.2017 до 28.02.2018 получали товар «телевизор» в количестве более 20 в каждой ТТН.",
+    "sql": "SELECT q1.receiver\nFROM (\n  SELECT t.receiverid AS receiver, COUNT(DISTINCT s.ttnid) AS ttn_count\n  FROM ttns t\n  NATURAL JOIN specifications s\n  WHERE t.TTNDate BETWEEN '2017-01-01' AND '2018-02-28'\n  GROUP BY t.receiverid\n) q1\nJOIN (\n  SELECT t.receiverid AS receiver, COUNT(DISTINCT s.productid) AS ttn_tv_count\n  FROM ttns t\n  NATURAL JOIN specifications s\n  NATURAL JOIN products p\n  WHERE t.TTNDate BETWEEN '2017-01-01' AND '2018-02-28'\n    AND p.productname = 'TV'\n  GROUP BY t.receiverid\n  HAVING SUM(s.count) > 5\n) q2 ON q1.receiver = q2.receiver\nWHERE q1.ttn_count = q2.ttn_tv_count"
+  },
+  {
+    "id": 5,
+    "question": "Выделить все накладные, выписанные в 2017 году, в которых продавались товары «Телевизор» и «компьютер» по цене меньше 100 и все товары стоили больше 5000.",
+    "sql": "SELECT DISTINCT t.ttnid\nFROM ttns t\nJOIN specifications s ON t.ttnid = s.ttnid\nJOIN specifications s1 ON t.ttnid = s1.ttnid\nJOIN products p ON s.productid = p.productid\nJOIN products p2 ON s1.productid = p2.productid\nWHERE extract(year from t.ttndate) = 2017\n  AND p.productname = 'TV'\n  AND p2.productname = 'PC'\n  AND s.price < 100 AND s1.price < 100\nINTERSECT\nSELECT DISTINCT s.ttnid\nFROM specifications s\nJOIN ttns t ON s.ttnid = t.ttnid\nWHERE extract(year from t.ttndate) = 2017\nGROUP BY s.ttnid\nHAVING SUM(s.price * s.count) > 5000"
+  },
+  {
+    "id": 6,
+    "question": "Выделить все накладные, выписанные в 2017 году, в которых продавались товары «Телевизор» или «компьютер», цена которых больше 1000, или выписанные в 2018 году, в которых все товары продавался в количестве больше 5.",
+    "sql": "SELECT q1.ttn\nFROM (\n  SELECT t.ttnid AS ttn, COUNT(s.ttnid) AS ttn_count\n  FROM ttns t\n  NATURAL JOIN specifications s\n  GROUP BY t.ttnid\n) q1\nJOIN (\n  SELECT t.ttnid AS ttn, COUNT(s.productid) AS ttn_5_count\n  FROM ttns t\n  NATURAL JOIN specifications s\n  WHERE EXTRACT(YEAR FROM T.TTNDate) = 2018 AND s.count > 5\n  GROUP BY t.ttnid\n) q2 ON q1.ttn = q2.ttn\nWHERE q1.ttn_count = q2.ttn_5_count\nUNION\nSELECT DISTINCT t.ttnid AS ttn\nFROM ttns t\nJOIN specifications s ON t.ttnid = s.ttnid\nJOIN specifications s1 ON t.ttnid = s1.ttnid\nJOIN products p ON s.productid = p.productid\nJOIN products p2 ON s1.productid = p2.productid\nWHERE extract(year from t.ttndate) = 2017\n  AND (p.productname = 'TV' OR p2.productname = 'PC')\n  AND s.price > 100 AND s1.price > 100"
+  },
+  {
+    "id": 7,
+    "question": "Выделить все товары, которые в период от 01.01.2012 до 28.02.2012 продавались в количестве от 200 до 300 в каждой ТТН.",
+    "sql": "SELECT q1.prod\nFROM (\n  SELECT p.ProductName AS prod, COUNT(DISTINCT t.TTNID) AS ttn_count\n  FROM PRODUCTS p\n  JOIN SPECIFICATIONS s ON p.ProductID = s.ProductID\n  JOIN TTNS t ON s.TTNID = t.TTNID\n  WHERE t.TTNDate BETWEEN '2017-01-01' AND '2018-02-28'\n  GROUP BY p.ProductName\n) q1\nJOIN (\n  SELECT p.ProductName AS prod, COUNT(DISTINCT t.TTNID) AS ttn_cc_count\n  FROM PRODUCTS p\n  JOIN SPECIFICATIONS s ON p.ProductID = s.ProductID\n  JOIN TTNS t ON s.TTNID = t.TTNID\n  WHERE t.TTNDate BETWEEN '2017-01-01' AND '2018-02-28'\n  GROUP BY p.ProductName\n  HAVING SUM(s.count) > 200 AND SUM(s.count) < 300\n) q2 ON q2.prod = q1.prod\nWHERE q1.ttn_count = q2.ttn_cc_count"
+  },
+  {
+    "id": 8,
+    "question": "Выделить все накладные, выписанные в 2017 или 2018 году, в которых участвовали клиент с именем начинающимся на B или С и в которых все товары указывались в количестве больше 20.",
+    "sql": "(SELECT q1.ttn\nFROM (\n  SELECT t.ttnid AS ttn, COUNT(s.ttnid) AS ttn_count\n  FROM ttns t\n  NATURAL JOIN specifications s\n  GROUP BY t.ttnid\n) q1\nJOIN (\n  SELECT t.ttnid AS ttn, COUNT(s.productid) AS ttn_5_count\n  FROM ttns t\n  NATURAL JOIN specifications s\n  WHERE s.count > 5\n  GROUP BY t.ttnid\n) q2 ON q1.ttn = q2.ttn\nWHERE q1.ttn_count = q2.ttn_5_count)\nINTERSECT\n(SELECT DISTINCT t.ttnid\nFROM TTNS t\nJOIN clients c ON t.senderid = c.clientid\nJOIN clients c1 ON t.receiverid = c1.clientid\nJOIN specifications s ON t.ttnid = s.ttnid\nWHERE ((c.ClientName LIKE 'B%' OR c.ClientName LIKE 'C%')\n   OR (c1.ClientName LIKE 'B%' OR c1.ClientName LIKE 'C%'))\n  AND (EXTRACT(YEAR FROM t.TTNDate) = 2017 OR EXTRACT(YEAR FROM t.TTNDate) = 2018))"
+  },
+  {
+    "id": 9,
+    "question": "Выделить все накладные, выписанные в 2019 году, стоимость которых меньше 5000, и в которых продавались только товары «Телевизор» и «компьютер».",
+    "sql": "SELECT DISTINCT t.ttnid\nFROM ttns t\nJOIN specifications s ON t.ttnid = s.ttnid\nJOIN specifications s1 ON t.ttnid = s1.ttnid\nJOIN products p ON s.productid = p.productid\nJOIN products p2 ON s1.productid = p2.productid\nWHERE extract(year from t.ttndate) = 2019\n  AND p.productname = 'TV'\n  AND p2.productname = 'PC'\nGROUP BY t.ttnid\nHAVING SUM(s.price * s.count) < 5000\nINTERSECT\nSELECT DISTINCT s.ttnid\nFROM specifications s\nGROUP BY s.ttnid\nHAVING COUNT(DISTINCT s.productid) = 2"
+  }
+]
