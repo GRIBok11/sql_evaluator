@@ -1,0 +1,68 @@
+my_task = """Описать построения запроса: «Выделить все накладные, выписанные в 2019
+году, в которых товар «Телевизор» продавался в количестве больше 5 и цена
+всех остальных товаров была больше 100000».
+"""
+
+
+my_answer = """select q1.ttn
+from
+(SELECT t.ttnid as ttn ,count(s.productid) as count_ from 
+ttns t
+join specifications s on t.ttnid = s.ttnid
+join products p on s.productid = p.productid
+where extract(year from t.ttndate) = 2019
+and p.productname ='TV'
+and s.count > 5
+GROUP by t.ttnid) q1
+join 
+(
+    select t.ttnid as ttn, count(s.productid) as count1 from 
+    ttns t
+    join specifications s on t.ttnid = s.ttnid
+    join products p on s.productid = p.productid
+    where p.productname !='TV'
+    group by t.ttnid
+    having sum(s.count*s.price)>1000
+    order by t.ttnid
+) q2 on q1.ttn = q2.ttn
+WHERE q1.count_ = q2.count1
+
+""" 
+
+
+my_task = """Описать построения запроса: Для каждого товара определить среднее
+количество в одной ТТН, выписанной в 2020 году. Выделить все ТТН,
+выписанные в 2021 году в которых все товары входили в количестве, больше
+среднего за 2020 год.
+.
+"""
+
+
+my_answer = """select q1.ttn,q1.avg_count from
+(select  s.ttnid as ttn, avg(s.count) as avg_count , s.productid
+from ttns t
+natural join specifications s
+where extract(year from t.ttndate) =2020
+group by s.ttnid,s.productid)  q1
+JOIN
+(
+select  s.ttnid as ttn,s.count as count_2021, count(s.productid) as count1
+from ttns t
+natural join specifications s
+where extract(year from t.ttndate) =2021
+group by s.ttnid , s.count
+)q4 on q1.ttn = q4.ttn
+JOIN
+(
+SELECT t.ttnid as ttn ,count(s.productid) as count_ from 
+ttns t
+join specifications s on t.ttnid = s.ttnid
+where extract(year from t.ttndate) = 2021
+group by t.ttnid
+) q5 on q1.ttn =q5.ttn
+where q4.count_2021 > q1.avg_count
+and q5.count_ =q4.count1
+order by q1.ttn
+
+
+""" 

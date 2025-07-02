@@ -1,0 +1,18 @@
+my_task = """Описать построения запроса: «Выделить все накладные, выписанные в 2020
+году, стоимость которых (накладных) больше 10000 и в которых продавались
+товары «Телевизор» или «компьютер» по цене меньше 100."""
+
+
+my_answer = """select t.TTNID FROM
+ttns t
+join specifications s on t.ttnid = s.ttnid
+join products p on s.productid = p.productid
+where extract(year from t.ttndate) = 2020
+and (p.productname = 'PC' or p.productname = 'TV')
+and s.price <100
+group by t.ttnid
+having sum(s.price*s.count) > 1000
+"""
+
+
+
