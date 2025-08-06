@@ -1,19 +1,25 @@
+import os
+import pandas as pd
+from dotenv import load_dotenv
 from langchain_groq import ChatGroq
 from langchain.prompts import PromptTemplate
-import pandas as pd
 
-import os
-from dotenv import load_dotenv
+# Загрузка переменных окружения из .env
 load_dotenv()
-
 groq_api_key = os.getenv('groq_api_key')
 
+# Проверка ключа
+if not groq_api_key:
+    raise ValueError("❗ Не найден API-ключ GROQ. Убедись, что в файле .env задан 'groq_api_key'.")
+
+# Инициализация модели
 llm = ChatGroq(
-    temperature=0.3,  
+    temperature=0.3,
     groq_api_key=groq_api_key,
     model_name="gemma2-9b-it"
 )
 
+# Описание структуры БД
 db_description = """
 Структура базы данных:
 
@@ -40,7 +46,7 @@ db_description = """
 - `Price` — цена за единицу товара.
 """
 
-
+# Шаблон промпта
 evaluation_prompt = PromptTemplate.from_template("""
 Вы — эксперт по SQL. Ниже приведено описание структуры базы данных, SQL-задача и SQL-запрос, написанный студентом.
 Если запрос реализует логику задачи и может дать правильный результат — даже если он отличается от эталона — считайте его "Правильным".
@@ -58,43 +64,73 @@ evaluation_prompt = PromptTemplate.from_template("""
 1. Итог запроса будет соответствовать условию задачи.
 2. Дайте итоговую краткую оценку: Правильный / Неправильный.
 
-Дай отвеет в виде правильно или неправильно:
+дай ответ в виде правильно\неправильно
 """)
 
-
+# Цепочка анализа
 analyze_chain = evaluation_prompt | llm
 
-my_task = """
-Для каждого товара определить среднюю стоимость в одной ТТН в 2017 году. Для каждого продавца выделить все ТТН, выписанные в 2018 году в которых стоимость хотя бы одного товара была больше средней стоимости этого товара за 2017 году."""
-
-my_answer ="""
-SELECT q1.ttn, q2.sender FROM (SELECT s.ttnid AS ttn, s.productid AS prod, AVG(s.count * s.price) AS avg_cost FROM ttns t JOIN specifications s ON s.ttnid = t.ttnid WHERE EXTRACT(YEAR FROM t.ttndate) = 2017 GROUP BY s.ttnid, s.productid) q1 RIGHT JOIN (SELECT s.ttnid AS ttn, s.productid AS prod, t.senderid AS sender, s.count * s.price AS cost_ FROM ttns t JOIN specifications s ON s.ttnid = t.ttnid WHERE EXTRACT(YEAR FROM t.ttndate) = 2018 GROUP BY s.ttnid, s.productid, t.senderid, s.count, s.price) q2 ON q2.prod = q1.prod WHERE q1.avg_cost < q2.cost_ ORDER BY q2.sender
-"""
-response = analyze_chain.invoke({
-    "db_description": db_description,
-    "task": my_task,
-    "student_answer": my_answer
-})
-
-print(response.content)
-
-
-path = "тесты.xlsx"
-def analyze_from_excel(file_path):
-    df = pd.read_excel(file_path, engine="openpyxl")  # Читаем Excel
+def analyze_excel(file_path):
+    df = pd.read_excel(file_path, engine="openpyxl")
     results = []
+    correct_matches = 0
+    total_checked = 0
+
+    def extract_verdict(text):
+        text = text.lower().replace("ё", "е").strip()
+        p = text.find("правильн")
+        np = text.find("неправильн")
+
+        if p == -1 and np == -1:
+            return "неопределено"
+        if np != -1 and (p == -1 or np < p):
+            return "неправильно"
+        return "правильно"
+
 
     for i, row in df.iterrows():
-        task_text = row[0]  # Первый столбец — SQL-задание и ответ
-        if pd.isna(task_text) or not str(task_text).strip():
-            continue  # Пропускаем пустые строки
+        try:
+            task = str(row.iloc[0]).strip()
+            answer = str(row.iloc[1]).strip()
+            comment = str(row.iloc[2]).strip() if len(row) > 2 else ""
 
-        # Передаём в цепочку
-        result = analyze_chain.invoke({
-            "db_description": db_description,
-            "task": "Задание и SQL-запрос ниже:",
-            "student_answer": task_text
-        })
-        results.append((i + 1, result.strip()))
+            if not task or not answer:
+                continue
 
-    return results
+            result = analyze_chain.invoke({
+                "db_description": db_description,
+                "task": task,
+                "student_answer": answer
+            })
+
+            llm_verdict = extract_verdict(result.content)
+            expected_verdict = extract_verdict(comment)
+
+            if llm_verdict == expected_verdict and llm_verdict != "неопределено":
+                correct_matches += 1
+
+            total_checked += 1
+
+            combined_output = f"{result.content.strip()}  📝 Правильная оценка: {comment}"
+            results.append((i + 1, task, combined_output))
+
+        except Exception as e:
+            results.append((i + 1, task, f"⚠️ Ошибка при анализе: {e}"))
+
+    return results, correct_matches, total_checked
+
+
+
+
+if __name__ == "__main__":
+    file_path = "тесты.xlsx"
+    
+    if not os.path.exists(file_path):
+        print(f"❗ Файл '{file_path}' не найден.")
+    else:
+        analyzed, correct, total = analyze_excel(file_path)
+
+        for idx, task_text, feedback in analyzed:
+            print(f"\n🧾 Задание {idx}  {feedback}\n{'-'*70}")
+
+        print(f"\n✅ Совпадений: {correct} из {total} ({round(correct / total * 100, 1)}%)")
